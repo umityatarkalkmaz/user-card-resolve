@@ -21,6 +21,15 @@
       <label>Süre (sn) <input id="seconds-input" type="number" min="3" max="3600" value="8"></label>
       <label>FPS <input id="fps-input" type="number" min="1" max="120" value="30"></label>
     </div>
+    <fieldset class="colors">
+      <legend>Renkler</legend>
+      <div class="color-general">
+        <label>Başlık rengi <input id="title-color-input" type="color" value="#ffffff"></label>
+        <label>Varsayılan isim rengi <input id="name-color-input" type="color" value="#ffffff"></label>
+        <button id="reset-colors" type="button" class="secondary">Renkleri sıfırla</button>
+      </div>
+      <div id="level-colors" class="level-colors" hidden></div>
+    </fieldset>
     <p id="status" role="status">CSV bekleniyor. Dosya bu cihazdan çıkmaz.</p>
     <div id="preview" class="preview"></div>
     <div class="actions">
