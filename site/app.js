@@ -6,7 +6,10 @@ import {
   buildGroups,
   computeLayout,
   formatPlainText,
+  computeMinScrollSeconds,
   generateSetting,
+  getOutputNodeName,
+  isScrollLayout,
 } from "./core.js";
 
 const elements = {
@@ -59,7 +62,10 @@ function updateOutput() {
     renderPreview(items);
     elements.downloadSetting.disabled = false;
     const total = groups.reduce((sum, group) => sum + group.members.length, 0);
-    showStatus(`${total} üye, ${groups.length} seviye hazır.`);
+    const scrollNote = isScrollLayout(items)
+      ? ` Akan yazı; okunabilirlik için en az ${computeMinScrollSeconds(items)} sn önerilir.`
+      : "";
+    showStatus(`${total} üye, ${groups.length} seviye hazır. MediaOut'a bağlanacak node: ${getOutputNodeName(items)}.${scrollNote}`);
   } catch (error) {
     elements.preview.replaceChildren();
     showStatus(error.message, true);

@@ -7,16 +7,17 @@ const COLUMN_MONTHS = "Üyeliğin devam ettiği toplam ay sayısı";
 const COLUMN_PRICE = "Fiyat";
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const MAX_MEMBERS = 60;
+const MAX_MEMBERS = 5000;
 const MAX_TEXT_LENGTH = 60;
-const POP_FRAMES = 10;
-const MAX_STAGGER_FRAMES = 4;
-const FADE_OUT_FRAMES = 15;
 const FRAME_ASPECT = 16 / 9;
 const LINE_SPACING = 1.3;
+const FUSION_LINE_SPACING = 1.13;
 const USABLE_HEIGHT = 0.88;
 const USABLE_WIDTH = 0.9;
 const AVERAGE_CHAR_WIDTH = 0.55;
+const MIN_CARD_SCALE_PERCENT = 60;
+const SCROLL_TEXT_SIZE = 0.04;
+const READABLE_SCROLL_SPEED = 0.2;
 
 export function cleanText(value) {
   const withoutControls = String(value ?? "")
@@ -131,14 +132,14 @@ function getLineHeight(size) {
   return size * FRAME_ASPECT * LINE_SPACING;
 }
 
-function arrangeGroups(groups, title, scale) {
+function arrangeCard(groups, title, scale) {
   const titleSize = 0.07 * scale;
   const levelSize = 0.042 * scale;
   const items = [];
   let cursor = 0;
 
   if (title) {
-    items.push({ kind: "title", text: title, x: 0.5, y: cursor + getLineHeight(titleSize) / 2, size: titleSize });
+    items.push({ kind: "title", text: title, x: 0.5, y: getLineHeight(titleSize) / 2, size: titleSize });
     cursor += getLineHeight(titleSize);
   }
 
@@ -155,21 +156,18 @@ function arrangeGroups(groups, title, scale) {
     cursor += getLineHeight(levelSize);
 
     const rowHeight = getLineHeight(memberSize);
-    const rowCount = Math.ceil(labels.length / columns);
-    labels.forEach((label, index) => {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      const inRow = row === rowCount - 1 && labels.length % columns ? labels.length % columns : columns;
-      const cellWidth = USABLE_WIDTH / columns;
+    const cellWidth = USABLE_WIDTH / columns;
+    for (let column = 0; column < columns; column += 1) {
+      const lines = labels.filter((_, index) => index % columns === column);
       items.push({
-        kind: "member",
-        text: label,
-        x: 0.5 + (column - (inRow - 1) / 2) * cellWidth,
-        y: cursor + row * rowHeight + rowHeight / 2,
+        kind: "names",
+        text: lines.join("\n"),
+        x: 0.5 + (column - (columns - 1) / 2) * cellWidth,
+        y: cursor + (lines.length * rowHeight) / 2,
         size: memberSize,
       });
-    });
-    cursor += rowCount * rowHeight;
+    }
+    cursor += Math.ceil(labels.length / columns) * rowHeight;
   }
 
   if (cursor > USABLE_HEIGHT) return null;
@@ -177,16 +175,35 @@ function arrangeGroups(groups, title, scale) {
   return items.map((item) => ({ ...item, y: item.y + offset }));
 }
 
+function arrangeScroll(groups, title) {
+  const sections = groups.map(({ level, members }) => [level, ...members.map(formatMemberLabel)].join("\n"));
+  const text = [title, ...sections].filter(Boolean).join("\n\n");
+  const height = text.split("\n").length * getLineHeight(SCROLL_TEXT_SIZE);
+  return [{ kind: "scroll", text, x: 0.5, y: 0.05 + height / 2, size: SCROLL_TEXT_SIZE, height }];
+}
+
 export function computeLayout(groups, title) {
   const total = groups.reduce((sum, group) => sum + group.members.length, 0);
-  if (total > MAX_MEMBERS) {
-    throw new Error(`Kart en fazla ${MAX_MEMBERS} üye alır; bu listede ${total} var. Düz metni Scroll'a yapıştır.`);
-  }
-  for (let scale = 1; scale >= 0.4; scale -= 0.05) {
-    const items = arrangeGroups(groups, cleanText(title), scale);
+  if (total > MAX_MEMBERS) throw new Error(`En fazla ${MAX_MEMBERS} üye desteklenir; bu listede ${total} var.`);
+
+  const safeTitle = cleanText(title);
+  for (let percent = 100; percent >= MIN_CARD_SCALE_PERCENT; percent -= 5) {
+    const items = arrangeCard(groups, safeTitle, percent / 100);
     if (items) return items;
   }
-  throw new Error("Üyeler karta sığmıyor. Düz metni Scroll'a yapıştır.");
+  return arrangeScroll(groups, safeTitle);
+}
+
+export function isScrollLayout(items) {
+  return items[0]?.kind === "scroll";
+}
+
+export function computeMinScrollSeconds([item]) {
+  return Math.ceil((1 + item.height) / READABLE_SCROLL_SPEED);
+}
+
+export function getOutputNodeName(items) {
+  return items.length > 1 ? `Merge${items.length}` : "Text1";
 }
 
 export function encodeLuaString(value) {
@@ -200,26 +217,18 @@ export function encodeLuaString(value) {
   return `${encoded}"`;
 }
 
-function formatNumber(value) {
-  return Number(value.toFixed(4)).toString();
+function formatNumber(value, digits = 4) {
+  return Number(value.toFixed(digits)).toString();
 }
 
-function buildSpline(name, keys) {
-  const frames = keys
-    .map(([frame, value], index) => {
-      const handles = [];
-      const previous = keys[index - 1];
-      const next = keys[index + 1];
-      if (previous) {
-        handles.push(`LH = { ${formatNumber(frame - (frame - previous[0]) / 3)}, ${formatNumber(value + (previous[1] - value) / 3)} }`);
-      }
-      if (next) {
-        handles.push(`RH = { ${formatNumber(frame + (next[0] - frame) / 3)}, ${formatNumber(value + (next[1] - value) / 3)} }`);
-      }
-      return `\t\t\t\t[${frame}] = { ${formatNumber(value)}, ${handles.join(", ")}, Flags = { Linear = true } },`;
-    })
-    .join("\n");
-  return `\t\t${name} = BezierSpline {\n\t\t\tSplineColor = { Red = 255, Green = 128, Blue = 0 },\n\t\t\tNameSet = true,\n\t\t\tKeyFrames = {\n${frames}\n\t\t\t}\n\t\t},`;
+function buildCenterInput(item, lastFrame) {
+  if (item.kind !== "scroll") {
+    return `Center = Input { Value = { ${formatNumber(item.x)}, ${formatNumber(1 - item.y)} }, },`;
+  }
+  const startY = -item.height / 2;
+  const step = (1 + item.height) / lastFrame;
+  const expression = `Point(0.5, ${formatNumber(startY, 6)} + time * ${formatNumber(step, 8)})`;
+  return `Center = Input { Value = { 0.5, ${formatNumber(startY, 6)} }, Expression = ${encodeLuaString(expression)}, },`;
 }
 
 function buildTextTool(id, item, font, lastFrame) {
@@ -234,6 +243,8 @@ function buildTextTool(id, item, font, lastFrame) {
 \t\t\t\tFont = Input { Value = ${encodeLuaString(font)}, },
 \t\t\t\tStyle = Input { Value = "Bold", },
 \t\t\t\tSize = Input { Value = ${formatNumber(item.size)}, },
+\t\t\t\tLineSpacing = Input { Value = ${FUSION_LINE_SPACING}, },
+\t\t\t\t${buildCenterInput(item, lastFrame)}
 \t\t\t\tRed1 = Input { Value = ${color[0]}, },
 \t\t\t\tGreen1 = Input { Value = ${color[1]}, },
 \t\t\t\tBlue1 = Input { Value = ${color[2]}, },
@@ -242,41 +253,22 @@ function buildTextTool(id, item, font, lastFrame) {
 \t\t},`;
 }
 
-function buildMergeTool(id, item, backgroundName) {
+function buildMergeTool(id, backgroundName) {
   return `\t\tMerge${id} = Merge {
 \t\t\tInputs = {
-\t\t\t\tBlend = Input { SourceOp = "Merge${id}Blend", Source = "Value", },
 \t\t\t\tBackground = Input { SourceOp = "${backgroundName}", Source = "Output", },
 \t\t\t\tForeground = Input { SourceOp = "Text${id}", Source = "Output", },
-\t\t\t\tCenter = Input { Value = { ${formatNumber(item.x)}, ${formatNumber(1 - item.y)} }, },
-\t\t\t\tSize = Input { SourceOp = "Merge${id}Size", Source = "Value", },
 \t\t\t\tPerformDepthMerge = Input { Value = 0, },
 \t\t\t},
 \t\t\tViewInfo = OperatorInfo { Pos = { ${id * 110}, 82.5 } },
 \t\t},`;
 }
 
-function buildBackgroundTool(lastFrame) {
-  return `\t\tMembersBackground = Background {
-\t\t\tInputs = {
-\t\t\t\tGlobalOut = Input { Value = ${lastFrame}, },
-\t\t\t\tWidth = Input { Value = 1920, },
-\t\t\t\tHeight = Input { Value = 1080, },
-\t\t\t\tUseFrameFormatSettings = Input { Value = 1, },
-\t\t\t\tTopLeftRed = Input { Value = 0, },
-\t\t\t\tTopLeftGreen = Input { Value = 0, },
-\t\t\t\tTopLeftBlue = Input { Value = 0, },
-\t\t\t\tTopLeftAlpha = Input { Value = 0, },
-\t\t\t},
-\t\t\tViewInfo = OperatorInfo { Pos = { 0, 82.5 } },
-\t\t},`;
-}
-
 export function validateTiming(seconds, framesPerSecond) {
   const duration = Number(seconds);
   const fps = Number(framesPerSecond);
-  if (!Number.isFinite(duration) || duration < 3 || duration > 60) {
-    throw new Error("Süre 3-60 saniye arasında olmalı.");
+  if (!Number.isFinite(duration) || duration < 3 || duration > 3600) {
+    throw new Error("Süre 3-3600 saniye arasında olmalı.");
   }
   if (!Number.isInteger(fps) || fps < 1 || fps > 120) {
     throw new Error("FPS 1-120 arasında tam sayı olmalı.");
@@ -290,21 +282,15 @@ export function generateSetting(items, { font, seconds, framesPerSecond }) {
 
   const { totalFrames } = validateTiming(seconds, framesPerSecond);
   const lastFrame = totalFrames - 1;
-  const fadeStart = lastFrame - FADE_OUT_FRAMES;
-  const available = fadeStart - POP_FRAMES;
-  const stagger = Math.min(MAX_STAGGER_FRAMES, Math.floor(available / Math.max(items.length - 1, 1)));
-  if (stagger < 1) throw new Error("Bu kadar üye için süre kısa; süreyi artır.");
-
-  const tools = [buildBackgroundTool(lastFrame)];
-  let backgroundName = "MembersBackground";
+  const tools = [];
+  let backgroundName = "Text1";
   items.forEach((item, index) => {
     const id = index + 1;
-    const start = index * stagger;
     tools.push(buildTextTool(id, item, safeFont, lastFrame));
-    tools.push(buildMergeTool(id, item, backgroundName));
-    tools.push(buildSpline(`Merge${id}Blend`, [[start, 0], [start + 3, 1], [fadeStart, 1], [lastFrame, 0]]));
-    tools.push(buildSpline(`Merge${id}Size`, [[start, 0.6], [start + 6, 1.12], [start + POP_FRAMES, 1]]));
-    backgroundName = `Merge${id}`;
+    if (id > 1) {
+      tools.push(buildMergeTool(id, backgroundName));
+      backgroundName = `Merge${id}`;
+    }
   });
 
   return `{\n\tTools = ordered() {\n${tools.join("\n")}\n\t},\n\tActiveTool = "${backgroundName}"\n}\n`;
