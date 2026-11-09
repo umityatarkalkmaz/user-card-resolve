@@ -1,0 +1,5 @@
+# Member exports contain personal data
+*.csv
+*.setting
+uyeler.txt
+*.zip

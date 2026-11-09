@@ -1,0 +1,14 @@
+services:
+  uye-karti:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    ports:
+      - "${PORT}:80"
+    volumes:
+      - ./site:/usr/share/nginx/html:ro

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>Üye Kartı</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Üye Kartı</h1>
+    <label id="drop-zone" class="drop-zone">
+      <input id="file-input" type="file" accept=".csv">
+      <span>YouTube üye CSV'sini buraya bırak veya tıkla</span>
+    </label>
+    <div class="options">
+      <label>Başlık <input id="title-input" value="Teşekkürler" maxlength="60"></label>
+      <label>Font <input id="font-input" value="Arial" maxlength="60"></label>
+      <label>Süre (sn) <input id="seconds-input" type="number" min="3" max="60" value="8"></label>
+      <label>FPS <input id="fps-input" type="number" min="1" max="120" value="30"></label>
+    </div>
+    <p id="status" role="status">CSV bekleniyor. Dosya bu cihazdan çıkmaz.</p>
+    <div id="preview" class="preview"></div>
+    <div class="actions">
+      <button id="download-setting" type="button" disabled>.setting indir</button>
+      <button id="download-text" type="button" disabled>Düz metin indir</button>
+    </div>
+  </main>
+</body>
+</html>
