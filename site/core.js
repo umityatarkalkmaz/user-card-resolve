@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Ümit Yatarkalkmaz
+
 const COLUMN_NAME = "Üye";
 const COLUMN_LEVEL = "Şu anki seviye";
 const COLUMN_MONTHS = "Üyeliğin devam ettiği toplam ay sayısı";
